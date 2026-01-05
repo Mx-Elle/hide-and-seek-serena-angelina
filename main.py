@@ -11,12 +11,10 @@ import shapely
 path_to_src = Path(__file__).parent.parent
 sys.path.insert(0, str(path_to_src))
 
-#remember to change the names to whatever your agent name is
-
 from Mesh.nav_mesh import NavMesh
-from agents.seeker_agent import DumbSeeker as Seeker
+from agents.seeker_agent import WannabeSeeker as Seeker
 from agent_base import Agent
-from agents.hider_agent import DumbHider as Hider
+from agents.hider_agent import WannabeHider as Hider
 from world_state import WorldState
 
 
@@ -31,7 +29,8 @@ def main():
     fps_clock = pygame.time.Clock()
 
     parent_dir = Path.cwd()
-    with open(parent_dir / "maps/maze_15.pkl", "rb") as f:
+    #adjust it here for mazes
+    with open(parent_dir / "maps/maze_5.pkl", "rb") as f:
         mesh: NavMesh = pickle.load(f)
     collider = mesh.polygon.buffer(3)
 
