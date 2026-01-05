@@ -11,6 +11,8 @@ import shapely
 path_to_src = Path(__file__).parent.parent
 sys.path.insert(0, str(path_to_src))
 
+#remember to change the names to whatever your agent name is
+
 from Mesh.nav_mesh import NavMesh
 from agents.seeker_agent import DumbSeeker as Seeker
 from agent_base import Agent
