@@ -1,17 +1,26 @@
 from agent_base import Agent
 from world_state import WorldState
 from Mesh.nav_mesh import NavMesh
+import heapq
 
-#Serenaa
+# Serena
+"""
+Strategy: create a heap of "probabilities" of where the hider is. Eliminate locations
+the hider could be by considering how far the hider can go after its last sighting
+(knowing that the hider's speed is 90% of the seeker's)
+"""
 
-class DumbSeeker(Agent):
+
+class WannabeSeeker(Agent):
+    probabilities = []
+    
 
     def __init__(self, world_map: NavMesh, max_speed: float):
         Agent.__init__(self, world_map, max_speed)
-        self.name = "Dumb Seeker"
+        self.name = "WannabeSeeker"
 
     def act(self, state: WorldState) -> tuple[float, float] | None:
-        # TODO: Write me!
+        
         ...
 
     @property
