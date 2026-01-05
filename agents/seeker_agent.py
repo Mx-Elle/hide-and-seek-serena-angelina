@@ -4,7 +4,7 @@ from Mesh.nav_mesh import NavMesh
 
 #Serenaa
 
-class DumbSeeker(Agent):
+class WannabeSeeker(Agent):
 
     def __init__(self, world_map: NavMesh, max_speed: float):
         Agent.__init__(self, world_map, max_speed)
