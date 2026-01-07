@@ -71,7 +71,7 @@ def main():
             d = math.dist((dx, dy), (0, 0))
             hider_next_position = shapely.affinity.translate(hider_position, dx, dy)
             line = shapely.LineString([hider_position, hider_next_position])
-            if d <= HIDER_SPEED and not collider.contains(line):
+            if d <= HIDER_SPEED and collider.contains(line):
                 hider_position = hider_next_position
         with hider._lock:
             hider._state = WorldState(hider_position, seeker_position)
@@ -85,7 +85,7 @@ def main():
             d = math.dist((dx, dy), (0, 0))
             seeker_next_position = shapely.affinity.translate(seeker_position, dx, dy)
             line = shapely.LineString([seeker_position, seeker_next_position])
-            if d <= SEEKER_SPEED and not collider.contains(line):
+            if d <= SEEKER_SPEED and collider.contains(line):
                 seeker_position = seeker_next_position
         with seeker._lock:
             can_see = mesh.has_line_of_sight(seeker_position, hider_position)
