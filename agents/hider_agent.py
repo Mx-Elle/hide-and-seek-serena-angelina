@@ -59,37 +59,50 @@ class WannabeHider(Agent):
             path.append(key)
             key = prev[key]
         return path[::-1]
-    #since this is a tuple, you can convert this to a shapely Linestring and use __.length to find the distance of the overall linestring
-    def find_optimal(self, state: WorldState) -> dict[NavMeshCell: float] | None:
-            # cornerscore: dict[NavMeshCell, float] = {lambda: float("inf")}
-            # sum_dist = 0
-            # for i in NavMesh:
-            #     #current plan is to select some NavMeshCell and cycle through every other NavMeshCell to add the sum of distances.
-            #     #however, I don't know if I can save them as navmeshcell id's and be able to recall them or something
-            #     #but, I plan on making a dict of NavMeshCells OR storing this sum value (somehow) so
-            #     for j in NavMesh:
-            #         #start = 
-            #         #end = 
-            #         sum_dist += shapely.LineString(self.astar(start, end)).length
+    
 
-        closed_list = set()
-        start_cell = self.map.find_cell(state.hider_position)
-        frontiers = [start_cell.neighbors]
+    def find_optimal(self, state: WorldState) -> defaultdict[NavMeshCell: float] | None:
+        current_cell = self.map.find_cell(state.hider_position)
+        closed_list = [(current_cell)]
+        frontiers = [current_cell.neighbors]
+
+        neighborscore = defaultdict(lambda: float("inf"))
+        neighborscore[current_cell] = len(current_cell.neighbors)
+
+#many issues here btw fix them eventually
+        while True:
+            if all(item in closed_list for item in frontiers):
+                break
+            for neighbor in frontiers:
+                cell, __ = neighbor
+                if cell in neighborscore:
+                    continue
+                current_cell = heapq.heappop(frontiers)
+                neighborscore[current_cell] = len(cell.neighbors)
+                closed_list.add(current_cell)
+        return neighborscore
+    
+    def find_proximity(self, state: WorldState) -> defaultdict[NavMeshCell: float] | None:
+        #for proximity, plugging arbitrary values first
+        smelly_cell = self.map.find_cell(state.seeker_position)
+        closed_list = [(smelly_cell)]
+        frontiers = [current_cell.neighbors]
+        # save this total result based on this prior calculation so you don't have to recalculate
 
         neighborscore = defaultdict(lambda: float("inf"))
         neighborscore[current_cell] = len(current_cell.neighbors)
 
         while True:
-            if frontiers in closed_list:
+            if all(item in closed_list for item in frontiers):
                 break
             for neighbor in frontiers:
+                neighbor, __ = neighbor
                 if neighbor in neighborscore:
                     continue
                 current_cell = heapq.heappop(frontiers)
                 neighborscore[current_cell] = len(neighbor.neighbors)
                 closed_list.add(current_cell)
-        
-
+        return neighborscore
 
 
     def go_straight(
@@ -102,18 +115,19 @@ class WannabeHider(Agent):
             target.y - loc.y,
         )
         distance = math.dist((dx, dy), (0, 0))
-        speed = min(distance, self.max_speed)
+        speed = min(distance, self.max_speed * 0.9999)
         dx, dy = speed * dx / distance, speed * dy / distance
         return dx, dy
 
     #changes from here. WorldState no longer has some saved location state, so you want to adjust target location 
     def act(self, state: WorldState) -> tuple[float, float] | None:
-        if state.location == state.target:
+        target = state.seeker_position
+        # target = heapq.heappop(self.find_optimal(state))
+        if state.hider_position == target:
             return
-        if self.map.has_line_of_sight(state.location, state.target):
-            return self.go_straight(state.location, state.target)
-        strip = self.astar(state)
-        print(strip)
+        if self.map.has_line_of_sight(state.hider_position, target):
+            return self.go_straight(state.hider_position, target)
+        strip = self.astar(state.hider_position, target)
         if strip is None:
             return None
         portals = [strip[i].neighbors[strip[i + 1]] for i in range(len(strip) - 1)]
@@ -123,8 +137,9 @@ class WannabeHider(Agent):
                 shapely.line_interpolate_point(portal, 0.99, normalized=True),
             ]
             for point in edges:
-                if self.map.has_line_of_sight(state.location, point):
-                    return self.go_straight(state.location, point)
+                state.hider_position = state.hider_position
+                if self.map.has_line_of_sight(state.hider_position, point):
+                    return self.go_straight(state.hider_position, point)
 
     @property
     def is_seeker(self) -> bool:
