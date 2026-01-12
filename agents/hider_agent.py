@@ -118,7 +118,6 @@ class WannabeHider(Agent):
             return None
         portals = [strip[i].neighbors[strip[i + 1]] for i in range(len(strip) - 1)]
         for portal in portals[::-1]:
-            # point = portal.centroid
             edges = [
                 shapely.line_interpolate_point(portal, 0.01, normalized=True),
                 shapely.line_interpolate_point(portal, 0.99, normalized=True),
