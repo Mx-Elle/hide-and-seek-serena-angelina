@@ -16,11 +16,13 @@ class WannabeHider(Agent):
         Agent.__init__(self, world_map, max_speed)
         self.name = "Wannabe Hider"
 
-    def act(self, state: WorldState) -> tuple[float, float] | None:
-        closed_list = set()  # explored
+    #BTW self_location = state.hider_position
+    target = NavMesh.random_position
 
-        start_cell = self.map.find_cell(state.location)
-        end_cell = self.map.find_cell(state.target)
+    def astar(self, start: shapely.Point, end: shapely.Point) -> tuple[float, float] | None:
+        closed_list = set()
+        start_cell = self.map.find_cell(start)
+        end_cell = self.map.find_cell(end)
         if not start_cell or not end_cell:
             return None
         g_scores = defaultdict(lambda: float("inf"))
@@ -57,6 +59,38 @@ class WannabeHider(Agent):
             path.append(key)
             key = prev[key]
         return path[::-1]
+    #since this is a tuple, you can convert this to a shapely Linestring and use __.length to find the distance of the overall linestring
+    def find_optimal(self, state: WorldState) -> dict[NavMeshCell: float] | None:
+            # cornerscore: dict[NavMeshCell, float] = {lambda: float("inf")}
+            # sum_dist = 0
+            # for i in NavMesh:
+            #     #current plan is to select some NavMeshCell and cycle through every other NavMeshCell to add the sum of distances.
+            #     #however, I don't know if I can save them as navmeshcell id's and be able to recall them or something
+            #     #but, I plan on making a dict of NavMeshCells OR storing this sum value (somehow) so
+            #     for j in NavMesh:
+            #         #start = 
+            #         #end = 
+            #         sum_dist += shapely.LineString(self.astar(start, end)).length
+
+        closed_list = set()
+        start_cell = self.map.find_cell(state.hider_position)
+        frontiers = [start_cell.neighbors]
+
+        neighborscore = defaultdict(lambda: float("inf"))
+        neighborscore[current_cell] = len(current_cell.neighbors)
+
+        while True:
+            if frontiers in closed_list:
+                break
+            for neighbor in frontiers:
+                if neighbor in neighborscore:
+                    continue
+                current_cell = heapq.heappop(frontiers)
+                neighborscore[current_cell] = len(neighbor.neighbors)
+                closed_list.add(current_cell)
+        
+
+
 
     def go_straight(
         self, loc: shapely.Point, target: shapely.Point | None
