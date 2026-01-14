@@ -7,6 +7,7 @@ from collections import defaultdict
 import heapq
 import shapely
 import math
+import time
 
 #Angelinaa
 
@@ -16,8 +17,6 @@ class WannabeHider(Agent):
         Agent.__init__(self, world_map, max_speed)
         self.name = "Wannabe Hider"
 
-    #BTW self_location = state.hider_position
-    target = NavMesh.random_position
 
     def astar(self, start: shapely.Point, end: shapely.Point) -> tuple[float, float] | None:
         closed_list = set()
@@ -63,46 +62,73 @@ class WannabeHider(Agent):
 
     def find_optimal(self, state: WorldState) -> defaultdict[NavMeshCell: float] | None:
         current_cell = self.map.find_cell(state.hider_position)
-        closed_list = [(current_cell)]
-        frontiers = [current_cell.neighbors]
+        closed_list = [current_cell]
+        frontiers = list(current_cell.neighbors.keys())
 
         neighborscore = defaultdict(lambda: float("inf"))
         neighborscore[current_cell] = len(current_cell.neighbors)
 
-#many issues here btw fix them eventually
         while True:
-            if all(item in closed_list for item in frontiers):
+            if all(item in frontiers for item in closed_list):
                 break
             for neighbor in frontiers:
-                cell, __ = neighbor
+                cell = neighbor
                 if cell in neighborscore:
                     continue
-                current_cell = heapq.heappop(frontiers)
-                neighborscore[current_cell] = len(cell.neighbors)
-                closed_list.add(current_cell)
+                frontiers += list(cell.neighbors.keys())
+                frontiers.remove(cell)
+                neighborscore[cell] = len(cell.neighbors)
+                closed_list.append(cell)
+        print(neighborscore)
         return neighborscore
     
-    def find_proximity(self, state: WorldState) -> defaultdict[NavMeshCell: float] | None:
-        #for proximity, plugging arbitrary values first
-        smelly_cell = self.map.find_cell(state.seeker_position)
-        closed_list = [(smelly_cell)]
-        frontiers = [current_cell.neighbors]
-        # save this total result based on this prior calculation so you don't have to recalculate
+    # def find_proximity(self, state: WorldState) -> defaultdict[NavMeshCell: float] | None:
+    #     #for proximity, plugging arbitrary values first
+    #     smelly_cell = self.map.find_cell(state.seeker_position)
+    #     closed_list = [(smelly_cell)]
+    #     frontiers = [current_cell.neighbors]
+    #     # save this total result based on this prior calculation so you don't have to recalculate
 
-        neighborscore = defaultdict(lambda: float("inf"))
-        neighborscore[current_cell] = len(current_cell.neighbors)
+    #     neighborscore = defaultdict(lambda: float("inf"))
+    #     neighborscore[current_cell] = len(current_cell.neighbors)
+
+    #     while True:
+    #         if all(item in closed_list for item in frontiers):
+    #             break
+    #         for neighbor in frontiers:
+    #             neighbor, __ = neighbor
+    #             if neighbor in neighborscore:
+    #                 continue
+    #             current_cell = heapq.heappop(frontiers)
+    #             neighborscore[current_cell] = len(neighbor.neighbors)
+    #             closed_list.add(current_cell)
+    #     return neighborscore
+
+    def calculate_optimal(
+            #dunno if state is necessary
+            self, state: WorldState
+    ) -> list | None:
+        current_cell = self.map.find_cell(state.hider_position)
+        closed_list = [current_cell]
+        frontiers = list(current_cell.neighbors.keys())
+        optimalmap = self.find_optimal(state)
+
+        probmap = heapq.heapify[(optimalmap(current_cell), current_cell)]
 
         while True:
-            if all(item in closed_list for item in frontiers):
+            if all(item in frontiers for item in closed_list):
                 break
             for neighbor in frontiers:
-                neighbor, __ = neighbor
-                if neighbor in neighborscore:
+                cell = neighbor
+                if cell in closed_list:
                     continue
-                current_cell = heapq.heappop(frontiers)
-                neighborscore[current_cell] = len(neighbor.neighbors)
-                closed_list.add(current_cell)
-        return neighborscore
+                frontiers += list(cell.neighbors.keys())
+                frontiers.remove(cell)
+                heapq.heappush(probmap, (optimalmap[current_cell], cell))
+                closed_list.append(cell)
+        print(probmap)
+        return probmap
+        
 
 
     def go_straight(
@@ -122,7 +148,7 @@ class WannabeHider(Agent):
     #changes from here. WorldState no longer has some saved location state, so you want to adjust target location 
     def act(self, state: WorldState) -> tuple[float, float] | None:
         target = state.seeker_position
-        # target = heapq.heappop(self.find_optimal(state))
+        # target = NavMesh.random_position
         if state.hider_position == target:
             return
         if self.map.has_line_of_sight(state.hider_position, target):
