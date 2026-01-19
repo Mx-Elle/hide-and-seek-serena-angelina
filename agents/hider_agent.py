@@ -18,6 +18,7 @@ class WannabeHider(Agent):
         self.name = "Wannabe Hider"
         self.last_decision_frame = 0
         self.current_target = None
+        self.map_value = None
 
 
     def astar(self, start: shapely.Point, end: shapely.Point) -> tuple[float, float] | None:
@@ -64,14 +65,14 @@ class WannabeHider(Agent):
 
     def find_optimal(self, state: WorldState) -> defaultdict | None:
         current_cell = self.map.find_cell(state.hider_position)
-        closed_list = [current_cell]
+        closed_list = set([current_cell])
         frontiers = list(current_cell.neighbors.keys())
 
         neighborscore = defaultdict(lambda: float("inf"))
         neighborscore[current_cell] = -len(current_cell.neighbors)
 
         while True:
-            if all(item in frontiers for item in closed_list):
+            if all(item in closed_list for item in frontiers):
                 break
             for neighbor in frontiers:
                 cell = neighbor
@@ -81,48 +82,28 @@ class WannabeHider(Agent):
                 frontiers.remove(cell)
                 neighborscore[cell] = -len(cell.neighbors)
                 closed_list.append(cell)
-        print(neighborscore)
         return neighborscore
     
-    def find_proximity(self, point: shapely.Point, radius: float) -> defaultdict:
-        # #for proximity, plugging arbitrary values first
-        # smelly_cell = self.map.find_cell(state.seeker_position)
-        # closed_list = [(smelly_cell)]
-        # frontiers = [current_cell.neighbors]
-        # # save this total result based on this prior calculation so you don't have to recalculate
 
-        # neighborscore = defaultdict(lambda: float("inf"))
-        # neighborscore[current_cell] = len(current_cell.neighbors)
-
-        # while True:
-        #     if all(item in closed_list for item in frontiers):
-        #         break
-        #     for neighbor in frontiers:
-        #         neighbor, __ = neighbor
-        #         if neighbor in neighborscore:
-        #             continue
-        #         current_cell = heapq.heappop(frontiers)
-        #         neighborscore[current_cell] = len(neighbor.neighbors)
-        #         closed_list.add(current_cell)
-        # return neighborscore
-    
+    def find_proximity(self, point: shapely.Point, radius: float) -> defaultdict:    
         closed_list = set()
         smelly_cell = self.map.find_cell(point)
         stinky = defaultdict(lambda: float(0))
-        stinky[smelly_cell] = radius
+        stinky[smelly_cell] = -radius
 
         frontier = [(stinky[smelly_cell], smelly_cell)]
 
-        while True:
+        while frontier:
             stink, current_cell = heapq.heappop(frontier)
-            if stink < 0:
+            if current_cell in closed_list:
+                continue
+            if stink > 0:
                 break
-
             for neighbor in current_cell.neighbors:
                 if neighbor in closed_list:
                     continue
-                temp_s = stinky[current_cell] - 1
-                if temp_s > stinky[neighbor]:
+                temp_s = stink + 1
+                if temp_s < stinky[neighbor]:
                     stinky[neighbor] = temp_s
                     if neighbor not in closed_list:
                         heapq.heappush(
@@ -132,21 +113,23 @@ class WannabeHider(Agent):
         return stinky
 
 
-    def calculate_optimal(
-            #dunno if state is necessary
-            self, state: WorldState
-    ) -> NavMeshCell | None:
+    def calculate_optimal(self, state: WorldState) -> NavMeshCell | None:
         current_cell = self.map.find_cell(state.hider_position)
         if not current_cell:
             return None
-        closed_list = [current_cell]
+        closed_list = set([current_cell])
         frontiers = list(current_cell.neighbors.keys())
-        optimalmap = self.find_optimal(state)
+        if self.map_value == None:
+            self.map_value = self.find_optimal(state)
 
-        probmap = heapq.heapify[(optimalmap[current_cell], current_cell)]
+        probmap = [(self.map_value[current_cell], current_cell)]
+        probmap = heapq.heapify(probmap)
+
+        stink_of_seeker = self.find_proximity(state.seeker_position, 5)
+        stink_of_hider = self.find_proximity(state.hider_position, 3)
 
         while True:
-            if all(item in frontiers for item in closed_list):
+            if all(item in closed_list for item in frontiers):
                 break
             for neighbor in frontiers:
                 cell = neighbor
@@ -154,10 +137,10 @@ class WannabeHider(Agent):
                     continue
                 frontiers += list(cell.neighbors.keys())
                 frontiers.remove(cell)
-                stink_of_seeker = self.find_proximity(state.seeker_position, 5)[cell]
-                stink_of_hider = self.find_proximity(state.seeker_position, 3)[cell]
-                value = optimalmap[current_cell] - (stink_of_hider * 0.5) + (stink_of_seeker * 3)
-                heapq.heappush(probmap, value, cell)
+                s_seeker = stink_of_seeker[cell]
+                s_hider = stink_of_hider[cell]
+                value = self.map_value[current_cell] + (s_hider * 0.5) - (s_seeker * 3)
+                heapq.heappush(probmap, (value, cell))
                 closed_list.append(cell)
 
         _, target = heapq.heappop(probmap)
@@ -189,9 +172,12 @@ class WannabeHider(Agent):
     def act(self, state: WorldState) -> tuple[float, float] | None:
         #choose a target
         if state.frame - self.last_decision_frame > 30 or self.current_target == None:
-            # self.current_target = self.map.random_position()
-            self.current_target = self.im_crine_please_work(state)
-            print(self.current_target)
+            self.current_target = self.map.random_position()
+            # self.current_target = self.im_crine_please_work(state)
+            #you have an error here
+            print(f"calc optim{self.calculate_optimal(state)}")
+            print(f"calc crine{self.im_crine_please_work(state)}")
+            print(self.map_value)
             self.last_decision_frame = state.frame
 
         target = self.current_target
