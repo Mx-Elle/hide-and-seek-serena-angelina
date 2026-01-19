@@ -7,7 +7,6 @@ from collections import defaultdict
 import heapq
 import shapely
 import math
-import time
 
 #Angelinaa
 
@@ -125,7 +124,7 @@ class WannabeHider(Agent):
         probmap = []
         heapq.heappush(probmap, (self.map_value[current_cell], current_cell.id, current_cell))
 
-        stink_of_seeker = self.find_proximity(state.seeker_position, 5)
+        stink_of_seeker = self.find_proximity(state.seeker_position, 8)
         stink_of_hider = self.find_proximity(state.hider_position, 2)
 
         while frontiers:
