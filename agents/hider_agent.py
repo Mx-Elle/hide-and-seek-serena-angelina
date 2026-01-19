@@ -71,7 +71,7 @@ class WannabeHider(Agent):
         neighborscore = defaultdict(lambda: float("inf"))
         neighborscore[current_cell] = -len(current_cell.neighbors)
 
-        while True:
+        while frontiers:
             if all(item in closed_list for item in frontiers):
                 break
             for neighbor in frontiers:
@@ -81,7 +81,7 @@ class WannabeHider(Agent):
                 frontiers += list(cell.neighbors.keys())
                 frontiers.remove(cell)
                 neighborscore[cell] = -len(cell.neighbors)
-                closed_list.append(cell)
+                closed_list.add(cell)
         return neighborscore
     
 
@@ -91,10 +91,10 @@ class WannabeHider(Agent):
         stinky = defaultdict(lambda: float(0))
         stinky[smelly_cell] = -radius
 
-        frontier = [(stinky[smelly_cell], smelly_cell)]
+        frontier = [(stinky[smelly_cell], smelly_cell.id, smelly_cell)]
 
         while frontier:
-            stink, current_cell = heapq.heappop(frontier)
+            stink, _, current_cell = heapq.heappop(frontier)
             if current_cell in closed_list:
                 continue
             if stink > 0:
@@ -107,7 +107,7 @@ class WannabeHider(Agent):
                     stinky[neighbor] = temp_s
                     if neighbor not in closed_list:
                         heapq.heappush(
-                            frontier, (stinky[neighbor], neighbor)
+                            frontier, (stinky[neighbor], neighbor.id, neighbor)
                         )
             closed_list.add(current_cell)
         return stinky
@@ -122,13 +122,13 @@ class WannabeHider(Agent):
         if self.map_value == None:
             self.map_value = self.find_optimal(state)
 
-        probmap = [(self.map_value[current_cell], current_cell)]
-        probmap = heapq.heapify(probmap)
+        probmap = []
+        heapq.heappush(probmap, (self.map_value[current_cell], current_cell.id, current_cell))
 
         stink_of_seeker = self.find_proximity(state.seeker_position, 5)
         stink_of_hider = self.find_proximity(state.hider_position, 3)
 
-        while True:
+        while frontiers:
             if all(item in closed_list for item in frontiers):
                 break
             for neighbor in frontiers:
@@ -140,10 +140,10 @@ class WannabeHider(Agent):
                 s_seeker = stink_of_seeker[cell]
                 s_hider = stink_of_hider[cell]
                 value = self.map_value[current_cell] + (s_hider * 0.5) - (s_seeker * 3)
-                heapq.heappush(probmap, (value, cell))
-                closed_list.append(cell)
+                heapq.heappush(probmap, (value, cell.id, cell))
+                closed_list.add(cell)
 
-        _, target = heapq.heappop(probmap)
+        _, _, target = heapq.heappop(probmap)
         return target
 
     def im_crine_please_work(self, state: WorldState) -> shapely.Point:
