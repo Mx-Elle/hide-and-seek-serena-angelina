@@ -126,7 +126,7 @@ class WannabeHider(Agent):
         heapq.heappush(probmap, (self.map_value[current_cell], current_cell.id, current_cell))
 
         stink_of_seeker = self.find_proximity(state.seeker_position, 5)
-        stink_of_hider = self.find_proximity(state.hider_position, 3)
+        stink_of_hider = self.find_proximity(state.hider_position, 2)
 
         while frontiers:
             if all(item in closed_list for item in frontiers):
@@ -139,7 +139,7 @@ class WannabeHider(Agent):
                 frontiers.remove(cell)
                 s_seeker = stink_of_seeker[cell]
                 s_hider = stink_of_hider[cell]
-                value = self.map_value[current_cell] + (s_hider * 0.5) - (s_seeker * 3)
+                value = self.map_value[current_cell] + (s_hider * 0.25) - (s_seeker * 3)
                 heapq.heappush(probmap, (value, cell.id, cell))
                 closed_list.add(cell)
 
@@ -148,8 +148,7 @@ class WannabeHider(Agent):
 
     def im_crine_please_work(self, state: WorldState) -> shapely.Point:
         ideal_point = self.calculate_optimal(state)
-        linestring = ideal_point.neighbors[ideal_point]
-        point = shapely.Point(linestring.coords[0])
+        point = ideal_point.polygon.centroid
         return point
         
 
@@ -172,12 +171,7 @@ class WannabeHider(Agent):
     def act(self, state: WorldState) -> tuple[float, float] | None:
         #choose a target
         if state.frame - self.last_decision_frame > 30 or self.current_target == None:
-            self.current_target = self.map.random_position()
-            # self.current_target = self.im_crine_please_work(state)
-            #you have an error here
-            print(f"calc optim{self.calculate_optimal(state)}")
-            print(f"calc crine{self.im_crine_please_work(state)}")
-            print(self.map_value)
+            self.current_target = self.im_crine_please_work(state)
             self.last_decision_frame = state.frame
 
         target = self.current_target
