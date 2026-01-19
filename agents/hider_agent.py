@@ -16,6 +16,8 @@ class WannabeHider(Agent):
     def __init__(self, world_map: NavMesh, max_speed: float):
         Agent.__init__(self, world_map, max_speed)
         self.name = "Wannabe Hider"
+        self.last_decision_frame = 0
+        self.current_target = None
 
 
     def astar(self, start: shapely.Point, end: shapely.Point) -> tuple[float, float] | None:
@@ -60,13 +62,13 @@ class WannabeHider(Agent):
         return path[::-1]
     
 
-    def find_optimal(self, state: WorldState) -> defaultdict[NavMeshCell: float] | None:
+    def find_optimal(self, state: WorldState) -> defaultdict | None:
         current_cell = self.map.find_cell(state.hider_position)
         closed_list = [current_cell]
         frontiers = list(current_cell.neighbors.keys())
 
         neighborscore = defaultdict(lambda: float("inf"))
-        neighborscore[current_cell] = len(current_cell.neighbors)
+        neighborscore[current_cell] = -len(current_cell.neighbors)
 
         while True:
             if all(item in frontiers for item in closed_list):
@@ -77,43 +79,71 @@ class WannabeHider(Agent):
                     continue
                 frontiers += list(cell.neighbors.keys())
                 frontiers.remove(cell)
-                neighborscore[cell] = len(cell.neighbors)
+                neighborscore[cell] = -len(cell.neighbors)
                 closed_list.append(cell)
         print(neighborscore)
         return neighborscore
     
-    # def find_proximity(self, state: WorldState) -> defaultdict[NavMeshCell: float] | None:
-    #     #for proximity, plugging arbitrary values first
-    #     smelly_cell = self.map.find_cell(state.seeker_position)
-    #     closed_list = [(smelly_cell)]
-    #     frontiers = [current_cell.neighbors]
-    #     # save this total result based on this prior calculation so you don't have to recalculate
+    def find_proximity(self, point: shapely.Point, radius: float) -> defaultdict:
+        # #for proximity, plugging arbitrary values first
+        # smelly_cell = self.map.find_cell(state.seeker_position)
+        # closed_list = [(smelly_cell)]
+        # frontiers = [current_cell.neighbors]
+        # # save this total result based on this prior calculation so you don't have to recalculate
 
-    #     neighborscore = defaultdict(lambda: float("inf"))
-    #     neighborscore[current_cell] = len(current_cell.neighbors)
+        # neighborscore = defaultdict(lambda: float("inf"))
+        # neighborscore[current_cell] = len(current_cell.neighbors)
 
-    #     while True:
-    #         if all(item in closed_list for item in frontiers):
-    #             break
-    #         for neighbor in frontiers:
-    #             neighbor, __ = neighbor
-    #             if neighbor in neighborscore:
-    #                 continue
-    #             current_cell = heapq.heappop(frontiers)
-    #             neighborscore[current_cell] = len(neighbor.neighbors)
-    #             closed_list.add(current_cell)
-    #     return neighborscore
+        # while True:
+        #     if all(item in closed_list for item in frontiers):
+        #         break
+        #     for neighbor in frontiers:
+        #         neighbor, __ = neighbor
+        #         if neighbor in neighborscore:
+        #             continue
+        #         current_cell = heapq.heappop(frontiers)
+        #         neighborscore[current_cell] = len(neighbor.neighbors)
+        #         closed_list.add(current_cell)
+        # return neighborscore
+    
+        closed_list = set()
+        smelly_cell = self.map.find_cell(point)
+        stinky = defaultdict(lambda: float(0))
+        stinky[smelly_cell] = radius
+
+        frontier = [(stinky[smelly_cell], smelly_cell)]
+
+        while True:
+            stink, current_cell = heapq.heappop(frontier)
+            if stink < 0:
+                break
+
+            for neighbor in current_cell.neighbors:
+                if neighbor in closed_list:
+                    continue
+                temp_s = stinky[current_cell] - 1
+                if temp_s > stinky[neighbor]:
+                    stinky[neighbor] = temp_s
+                    if neighbor not in closed_list:
+                        heapq.heappush(
+                            frontier, (stinky[neighbor], neighbor)
+                        )
+            closed_list.add(current_cell)
+        return stinky
+
 
     def calculate_optimal(
             #dunno if state is necessary
             self, state: WorldState
-    ) -> list | None:
+    ) -> NavMeshCell | None:
         current_cell = self.map.find_cell(state.hider_position)
+        if not current_cell:
+            return None
         closed_list = [current_cell]
         frontiers = list(current_cell.neighbors.keys())
         optimalmap = self.find_optimal(state)
 
-        probmap = heapq.heapify[(optimalmap(current_cell), current_cell)]
+        probmap = heapq.heapify[(optimalmap[current_cell], current_cell)]
 
         while True:
             if all(item in frontiers for item in closed_list):
@@ -124,12 +154,21 @@ class WannabeHider(Agent):
                     continue
                 frontiers += list(cell.neighbors.keys())
                 frontiers.remove(cell)
-                heapq.heappush(probmap, (optimalmap[current_cell], cell))
+                stink_of_seeker = self.find_proximity(state.seeker_position, 5)[cell]
+                stink_of_hider = self.find_proximity(state.seeker_position, 3)[cell]
+                value = optimalmap[current_cell] - (stink_of_hider * 0.5) + (stink_of_seeker * 3)
+                heapq.heappush(probmap, value, cell)
                 closed_list.append(cell)
-        print(probmap)
-        return probmap
-        
 
+        _, target = heapq.heappop(probmap)
+        return target
+
+    def im_crine_please_work(self, state: WorldState) -> shapely.Point:
+        ideal_point = self.calculate_optimal(state)
+        linestring = ideal_point.neighbors[ideal_point]
+        point = shapely.Point(linestring.coords[0])
+        return point
+        
 
     def go_straight(
         self, loc: shapely.Point, target: shapely.Point | None
@@ -144,18 +183,29 @@ class WannabeHider(Agent):
         speed = min(distance, self.max_speed * 0.9999)
         dx, dy = speed * dx / distance, speed * dy / distance
         return dx, dy
+    
 
     #changes from here. WorldState no longer has some saved location state, so you want to adjust target location 
     def act(self, state: WorldState) -> tuple[float, float] | None:
-        target = state.seeker_position
-        # target = NavMesh.random_position
+        #choose a target
+        if state.frame - self.last_decision_frame > 30 or self.current_target == None:
+            # self.current_target = self.map.random_position()
+            self.current_target = self.im_crine_please_work(state)
+            print(self.current_target)
+            self.last_decision_frame = state.frame
+
+        target = self.current_target
+        
         if state.hider_position == target:
             return
+        
         if self.map.has_line_of_sight(state.hider_position, target):
             return self.go_straight(state.hider_position, target)
+        
         strip = self.astar(state.hider_position, target)
         if strip is None:
             return None
+        
         portals = [strip[i].neighbors[strip[i + 1]] for i in range(len(strip) - 1)]
         for portal in portals[::-1]:
             edges = [
@@ -163,7 +213,6 @@ class WannabeHider(Agent):
                 shapely.line_interpolate_point(portal, 0.99, normalized=True),
             ]
             for point in edges:
-                state.hider_position = state.hider_position
                 if self.map.has_line_of_sight(state.hider_position, point):
                     return self.go_straight(state.hider_position, point)
 
