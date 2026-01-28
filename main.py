@@ -23,7 +23,7 @@ def main():
     SEEKER_SPEED = 10
     HIDER_SPEED = SEEKER_SPEED * 0.9
     GAME_LENGTH = 240
-    HIDER_HEAD_START = 15
+    HIDER_HEAD_START = 1
     TAG_DISTANCE = 10
 
     fps = 30
@@ -94,6 +94,8 @@ def main():
             line = shapely.LineString([seeker_position, seeker_next_position])
             if d <= SEEKER_SPEED and collider.contains(line):
                 seeker_position = seeker_next_position
+            else:
+                print("ILLEGAL!")
         with seeker._lock:
             can_see = mesh.has_line_of_sight(seeker_position, hider_position)
             seeker._state.hider_position = hider_position if can_see else None

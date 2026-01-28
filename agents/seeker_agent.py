@@ -10,28 +10,20 @@ import math
 import time
 
 # Serena
-"""
-Strategy: create a heap of "probabilities" of where the hider is. Eliminate locations
-the hider could be by considering how far the hider can go after its last sighting
-(knowing that the hider's speed is 90% of the seeker's)
-plan for finding probability:
-    1. haven't seen hider: 
 
-defaultdict for possible locations and add the probabilities too?
-"""
 
 class WannabeSeeker(Agent):
-    
 
     def __init__(self, world_map: NavMesh, max_speed: float):
         Agent.__init__(self, world_map, max_speed)
         self.name = "WannabeSeeker"
+        self.probabilities = {}
 
-    def astar(self, state: WorldState) -> list[NavMeshCell] | None:
+    def astar(
+        self, start: shapely.Point, end: shapely.Point
+    ) -> list[NavMeshCell] | None:
+        start_cell, end_cell = self.map.find_cell(start), self.map.find_cell(end)
         closed_list = set()  # explored
-
-        start_cell = self.map.find_cell(state.location)
-        end_cell = self.map.find_cell(state.target)
         if not start_cell or not end_cell:
             return None
         g_scores = defaultdict(lambda: float("inf"))
@@ -39,7 +31,6 @@ class WannabeSeeker(Agent):
         f_scores = defaultdict(lambda: float("inf"))
         f_scores[start_cell] = start_cell.distance(end_cell)
 
-        # this is based on prior astar, making adjustments
         frontier = [(f_scores[start_cell], start_cell.id, start_cell)]
         prev: dict[NavMeshCell, NavMeshCell | None] = {start_cell: None}
 
@@ -51,6 +42,7 @@ class WannabeSeeker(Agent):
             for neighbor in current_cell.neighbors:
                 if neighbor in closed_list:
                     continue
+
                 temp_g = g_scores[current_cell] + 1
                 if temp_g < g_scores[neighbor]:
                     g_scores[neighbor] = temp_g
@@ -60,6 +52,7 @@ class WannabeSeeker(Agent):
                         heapq.heappush(
                             frontier, (f_scores[neighbor], neighbor.id, neighbor)
                         )
+
             closed_list.add(current_cell)
 
         path = []
@@ -72,41 +65,99 @@ class WannabeSeeker(Agent):
     def go_straight(
         self, loc: shapely.Point, target: shapely.Point | None
     ) -> tuple[float, float] | None:
-        if loc == target or not self.map.in_bounds(target) or target == None:
+        if loc == target or not target or not self.map.in_bounds(target):
             # the issue right now is that temp_point seems to be set as None too often. This likely explains why it's stopping at linestrings?
             return
+
         dx, dy = (
             target.x - loc.x,
             target.y - loc.y,
         )
+
         distance = math.dist((dx, dy), (0, 0))
         speed = min(distance, self.max_speed)
         dx, dy = speed * dx / distance, speed * dy / distance
         return dx, dy
 
-    def after_sighting(self, state: WorldState, last_sighted_loc, probabilities: defaultdict):
-        # checking if it's possible for hider to be somewhere
-        # if change in distance > #frames * 2.7 (hider speed), then impossible
-        curr_time = time.time()
-        curr_node = self.map.find_cell(state.seeker_position)
-        distance = last_sighted_loc - curr_node
-        if curr_time * 2.7 < distance:
-            probabilities[curr_node] = 0
+    # def after_sighting(self, state: WorldState, last_sighted_loc, self.probabilities: defaultdict):
+    # checking if it's possible for hider to be somewhere
+    # if change in distance > #frames * 2.7 (hider speed), then impossible
+    # curr_time = time.time()
+    # curr_node = self.map.find_cell(state.seeker_position)
+    # distance = last_sighted_loc - curr_node
+    # if curr_time * 2.7 < distance:
+    # self.probabilities[curr_node] = 0
 
+    def later_sight(self, state: WorldState):
+        frontier = []
+        target_cell = None
+        current_node = self.map.find_cell(state.seeker_position)
+        frontier.append(current_node)
+        if not self.map.has_line_of_sight(
+            state.seeker_position, state.hider_position
+        ):
+            # target_value = None
+            target_cell = max(self.probabilities, key=lambda c: (self.probabilities[c], -current_node.polygon.centroid.distance(c.polygon.centroid)))
+            # for cell, prob in self.probabilities:
+            #     if prob > target_value:
+            #         target_value = prob
+            #         target_cell = cell
+            #     elif prob == target_value:
+            #         if distance(self, target_cell) < distance(self, cell):
+            #             target_cell = cell
+            # target_lst = self.astar(self, state.seeker_position, target_cell)
+        for cell in self.probabilities:
+            if not self.map.has_line_of_sight(
+                state.seeker_position, cell.polygon.centroid
+            ):
+                self.probabilities[cell] += 1
+            else:
+                self.probabilities[cell] = 0
+        return target_cell
+
+    def initial_sight(self, state: WorldState):
+        if state.hider_position:
+            target = state.hider_position
+            for cell in self.probabilities:
+                if cell != target:
+                    self.probabilities[cell] = 0
+        else:
+            frontier = []
+            current_node = self.map.find_cell(state.seeker_position)
+            frontier.append(current_node)
+            while len(frontier) > 0:
+                current_node = frontier.pop()
+                for neighbor in current_node.neighbors:
+                    frontier.append(neighbor)
+                if self.map.has_line_of_sight(
+                    state.seeker_position, current_node.polygon.centroid
+                ):
+                    self.probabilities[current_node] = 0
+                else:
+                    self.probabilities[current_node] = float("inf")
+            target = max(self.probabilities, key=lambda c: (self.probabilities[c], -current_node.polygon.centroid.distance(c.polygon.centroid)))
+        return target
 
     def act(self, state: WorldState) -> tuple[float, float] | None:
-        probabilities = defaultdict(lambda: float(1))
-        if state.hider_position == state.target:
-            return
-        if self.map.has_line_of_sight(state.seeker_position, state.hider_position):
-            return self.go_straight(state.seeker_position, state.hider_position)
-            last_sighted_loc = state.location
-            last_sighted_time = time.time()
-            possible_loc(last_sighted_loc, probabilities)
-        if 
-        strip = self.astar(state)
+        target = None
+
+        if len(self.probabilities) == 0:
+            target = self.initial_sight(state)
+        else:
+            target = self.later_sight(state)
+
+        # if target == None:
+
+        # if self.map.has_line_of_sight(state.seeker_position, state.hider_position):
+        # return self.go_straight(state.seeker_position, state.hider_position)
+        # last_sighted_loc = state.location
+        # last_sighted_time = time.time()
+        # possible_loc(last_sighted_loc, self.probabilities)
+
+        strip = self.astar(state.seeker_position, target)
         if strip is None:
             return None
+
         portals = [strip[i].neighbors[strip[i + 1]] for i in range(len(strip) - 1)]
         # while self.map.has_line_of_sight(state.location, state.target) == False:
         for portal in portals[::-1]:
@@ -115,10 +166,10 @@ class WannabeSeeker(Agent):
                 shapely.line_interpolate_point(portal, 0.01, normalized=True),
                 shapely.line_interpolate_point(portal, 0.99, normalized=True),
             ]
+
             for point in edges:
                 if self.map.has_line_of_sight(state.location, point):
                     return self.go_straight(state.location, point)
-
 
     @property
     def is_seeker(self) -> bool:
